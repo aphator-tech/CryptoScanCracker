@@ -1,24 +1,24 @@
-# Crypto Wallet Balance Checker
+# Crypto Wallet Explorer
 
-A Go application that generates random cryptocurrency wallet private keys and checks balances across multiple blockchains (EVM and non-EVM) without requiring any API keys.
+A Go-powered application that generates random cryptocurrency wallet addresses and scans multiple blockchains for balances, designed for cryptocurrency enthusiasts and researchers.
 
 ## Features
 
-- 🔑 **Generates** random cryptocurrency wallet private keys & addresses
-- 💰 **Checks balances** across multiple blockchains simultaneously (including Bitcoin)
-- 🚀 **High performance** with concurrent requests and proxy support
-- 🔒 **No API keys required** - scrapes balance data directly from explorers
-- 🛡️ **Smart rate limit handling** with 60-second cooldown for affected chains
-- 💻 **Clean, colorful output** with emoji indicators showing only wallets with balances
-- 📊 **Saves results** to JSON for easy processing
-- 🧮 **Works with both** Ethereum Virtual Machine (EVM) chains and Bitcoin
+- 🔑 **Generates** random cryptocurrency wallet addresses
+- 💰 **Scans balances** across multiple blockchain networks simultaneously 
+- 🚀 **High performance** with concurrent processing and batch operations
+- 🔒 **No API keys required** - communicates directly with blockchain explorers
+- 🛡️ **Smart rate limit protection** with automatic cooldown for affected chains
+- 💻 **Real-time feedback** showing each wallet check with timestamp and status
+- 📊 **Saves results** to JSON for later analysis
+- 🔄 **Multiple chain support** for both Bitcoin-type and Ethereum-compatible networks
 
 ## Supported Blockchains
 
-### Non-EVM Chains
-- Bitcoin (BTC) - Legacy, P2SH, and Bech32 address formats
+### Bitcoin-type Networks
+- Bitcoin (BTC) - Multiple address formats supported
 
-### EVM Chains
+### Ethereum-compatible Networks
 - Ethereum (ETH)
 - Binance Smart Chain (BNB)
 - Polygon (MATIC)
@@ -29,109 +29,89 @@ A Go application that generates random cryptocurrency wallet private keys and ch
 - Base (ETH)
 - Celo (CELO)
 
-## Installation
+## Getting Started
 
-### Prerequisites
+### Requirements
 
-- Go 1.18 or higher
+- Go 1.18 or higher installed on your system
 
-### Installing Go
+### Quick Start (From ZIP File)
 
-#### For Windows:
-1. Download the Go installer from [golang.org/dl/](https://golang.org/dl/)
-2. Run the installer and follow the instructions
-3. Add Go to your PATH if needed
+1. **Extract the ZIP file** to a location of your choice
+   
+2. **Open a terminal/command prompt** and navigate to the extracted folder:
+   ```bash
+   cd path/to/extracted/folder
+   ```
 
-#### For macOS:
-```bash
-# Using Homebrew
-brew install go
-```
+3. **Build the application**:
+   ```bash
+   go build -o wallet-explorer
+   ```
 
-#### For Linux:
-```bash
-# For Ubuntu/Debian
-sudo apt update
-sudo apt install golang-go
+4. **Run the application**:
+   ```bash
+   # On Windows
+   wallet-explorer.exe -wallets 100 -batch 10
+   
+   # On macOS/Linux
+   ./wallet-explorer -wallets 100 -batch 10
+   ```
 
-# For CentOS/RHEL
-sudo yum install golang
-```
+## Command Line Options
 
-### Setting up the Project
-
-1. Clone this repository or download and extract the ZIP file:
-```bash
-git clone https://github.com/yourusername/crypto-wallet-checker.git
-cd crypto-wallet-checker
-```
-
-2. Build the project:
-```bash
-go build -o wallet-checker
-```
-
-## Usage
-
-Run the application with default settings:
-```bash
-./wallet-checker
-```
-
-### Available Command Line Flags
-
-- `-wallets <n>`: Number of wallets to generate (default: 100)
-- `-batch <n>`: Batch size for concurrent checking (default: 10)
-- `-delay <ms>`: Delay between requests in milliseconds (default: 20)
-- `-output <file>`: Output JSON file (default: "wallets_with_balance.json")
-- `-goroutines <n>`: Maximum goroutines to use (default: 50)
+- `-wallets <number>`: Total wallet addresses to generate and check (default: 100)
+- `-batch <number>`: Number of wallets to process in each batch (default: 10)
+- `-delay <milliseconds>`: Delay between requests to avoid rate limits (default: 20)
+- `-output <filename>`: Name of output JSON file (default: "wallets_with_balance.json")
+- `-goroutines <number>`: Maximum goroutines to use (default: 50)
 - `-log <level>`: Log level [debug, info, warn, error] (default: info)
-- `-chains <list>`: Comma-separated chains to check (default: all)
-- `-infinite <bool>`: Run in infinite mode (default: true)
+- `-chains <list>`: Comma-separated list of chains to check (default: all available)
+- `-infinite <true/false>`: Run in continuous mode (default: true)
 
-### Examples
+## Usage Examples
 
-Check all chains with 50 wallets in a single batch:
+Check a smaller set of wallets across all chains:
 ```bash
-./wallet-checker -wallets 50 -batch 50
+./wallet-explorer -wallets 50 -batch 15
 ```
 
-Only check Ethereum and Binance Smart Chain:
+Focus only on Bitcoin network:
 ```bash
-./wallet-checker -chains ethereum,binance
+./wallet-explorer -chains bitcoin -wallets 200
 ```
 
-Check only Bitcoin addresses:
+Check specific chains with optimized settings:
 ```bash
-./wallet-checker -chains bitcoin
+./wallet-explorer -chains bitcoin,ethereum,binance -batch 20 -delay 10
 ```
 
-Check Bitcoin and Ethereum with optimized settings:
+Set warning-only logs for less console output:
 ```bash
-./wallet-checker -chains bitcoin,ethereum -batch 40 -delay 5
+./wallet-explorer -log warn -wallets 1000 -batch 20
 ```
 
-Run with maximum debug information:
+High-performance settings for powerful computers:
 ```bash
-./wallet-checker -log debug -wallets 10 -batch 5 -delay 500
+./wallet-explorer -wallets 500 -batch 50 -delay 5 -goroutines 100
 ```
 
-Improved performance mode (for powerful machines):
-```bash
-./wallet-checker -wallets 200 -batch 40 -delay 5 -goroutines 100
-```
+## Output Display
 
-## Output
-
-When a wallet with a balance is found, the application will output a colorful message with emoji indicators:
+The application shows real-time wallet checking with timestamp and status:
 
 ```
-💰 Ethereum: 0x1a2b3c4d5e6f... = 0.125
-💰 Bitcoin: 1A2b3C4d5E6f... = 0.012
+[09:15:23] 0x7a3b4c5d6e7f8g9h... - ❌ No balance
+[09:15:24] bc1abc123def456g... - ❌ No balance
+[09:15:25] 0x1f2e3d4c5b6a7... - ✅ BALANCE FOUND!
 ```
 
-All wallets with balances are automatically saved to `wallets_with_balance.json` in the following format:
+When a wallet with balance is found, details are also shown:
+```
+₿ Bitcoin: bc1abc123def456g... = 0.00123
+```
 
+All wallets with balances are saved to the output file in this format:
 ```json
 [
   {
@@ -141,29 +121,21 @@ All wallets with balances are automatically saved to `wallets_with_balance.json`
     "balance": "0.125",
     "hasBalance": true,
     "chain_type": "evm"
-  },
-  {
-    "address": "1A2b3C4d5E6f...",
-    "privateKey": "0x1a2b3c4d5e6f...",
-    "chain": "bitcoin",
-    "balance": "0.012",
-    "hasBalance": true,
-    "chain_type": "bitcoin"
   }
 ]
 ```
 
-## Performance Tips
+## Tips for Better Performance
 
-- For faster checking, use lower `-delay` values (e.g., `-delay 10`)
-- Increase `-batch` size for more concurrent checks
-- Use `-goroutines` to control CPU usage (higher = faster but more CPU)
+- Lower `-delay` values increase speed but may trigger rate limits
+- Larger `-batch` sizes process more wallets simultaneously
+- Choose specific chains with `-chains` to focus scanning
+- Use `-log warn` to reduce console output and improve performance
 
-## Notes
+## Legal and Educational Use
 
-- The application handles rate limiting (429 errors) automatically
-- Running with `-log debug` shows detailed information but slows down processing
+This tool is designed for educational and research purposes only. Always ensure you comply with all applicable laws and terms of service when using blockchain explorers.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
