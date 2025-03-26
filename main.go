@@ -55,14 +55,24 @@ func main() {
             chainNames = getEnabledChainsFromEnv(logger)
         } else {
             // Use command line arguments for chain names
-            for _, chain := range explorer.GetChainList(*selectedChains) {
-                chainNames = append(chainNames, chain.Name)
+            logger.Info(fmt.Sprintf("Using command line chains: %s", *selectedChains))
+            
+            if strings.TrimSpace(*selectedChains) != "" && *selectedChains != "all" {
+                // Parse comma-separated chain names from command line
+                for _, name := range strings.Split(*selectedChains, ",") {
+                    chainNames = append(chainNames, strings.TrimSpace(strings.ToLower(name)))
+                }
+            } else {
+                // Use GetChainList if selectedChains is "all" or empty
+                for _, chain := range explorer.GetChainList(*selectedChains) {
+                    chainNames = append(chainNames, chain.Name)
+                }
             }
         }
         
         if len(chainNames) == 0 {
             // Just use a subset of chains to avoid rate limiting and improve performance
-            logger.Warn("Using a subset of faster chains to avoid rate limits")
+            logger.Warn("Using a subset of faster chains to avoid rate limits - selecting reliable chains only")
             // Only use chains that don't rate limit as much, including Bitcoin
             chainNames = []string{"bitcoin", "binance", "polygon", "avalanche", "fantom", "celo"}
         }
