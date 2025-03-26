@@ -42,6 +42,11 @@ func NewLogger(levelStr string) *Logger {
         }
 }
 
+// IsDebugEnabled returns true if debug logging is enabled
+func (l *Logger) IsDebugEnabled() bool {
+        return l.level <= LogLevelDebug
+}
+
 // parseLogLevel parses a string log level into a LogLevel value
 func parseLogLevel(levelStr string) LogLevel {
         switch strings.ToLower(levelStr) {

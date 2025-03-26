@@ -95,31 +95,35 @@ func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) 
                 HasBalance: false,
         }
         
-        // Apply chain-specific extra delay if needed
-        if chain.ExtraDelay > 0 {
+        // Apply chain-specific extra delay if needed, but only in debug mode
+        // In normal operation, we skip this for maximum speed
+        if chain.ExtraDelay > 0 && bc.logger.IsDebugEnabled() {
                 time.Sleep(time.Duration(chain.ExtraDelay) * time.Millisecond)
         }
         
-        // Make the HTTP request
+        // Only log in debug mode to reduce output clutter
         bc.logger.Debug(fmt.Sprintf("Checking balance on %s: %s", chain.Name, w.Address))
         
+        // Make the HTTP request with optimized error handling
         html, err := bc.httpClient.Get(url, chain.UserAgent)
         if err != nil {
-                bc.logger.Error(fmt.Sprintf("Error checking balance on %s: %v", chain.Name, err))
+                // Only log errors in debug mode for cleaner output
+                bc.logger.Debug(fmt.Sprintf("Error checking balance on %s: %v", chain.Name, err))
                 return result
         }
         
-        // Parse the balance from the HTML
+        // Parse the balance from the HTML - skip excessive logging for better performance
         balance, err := bc.parseBalance(html, chain.BalancePattern)
         if err != nil {
-                bc.logger.Debug(fmt.Sprintf("No balance found on %s: %v", chain.Name, err))
+                // No need to log zero balances, they're the vast majority
                 return result
         }
         
         // Parse the balance as a float to check if it's greater than zero
         balanceFloat, err := strconv.ParseFloat(balance, 64)
         if err != nil {
-                bc.logger.Error(fmt.Sprintf("Error parsing balance '%s' as float: %v", balance, err))
+                // Only log in debug mode
+                bc.logger.Debug(fmt.Sprintf("Error parsing balance '%s' as float: %v", balance, err))
                 return result
         }
         
@@ -127,10 +131,8 @@ func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) 
         result.Balance = balance
         result.HasBalance = balanceFloat > 0
         
-        if result.HasBalance {
-                bc.logger.Info(fmt.Sprintf("Found wallet with balance on %s: %s = %s", 
-                        chain.Name, w.Address, balance))
-        }
+        // If balance is found, it will be shown in the main output, 
+        // no need to duplicate the log here
         
         return result
 }

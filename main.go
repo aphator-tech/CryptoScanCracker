@@ -8,6 +8,7 @@ import (
         "runtime"
         "sync"
         "syscall"
+        "time"
 
         "cryptowallet/explorer"
         "cryptowallet/storage"
@@ -30,7 +31,10 @@ var (
 func main() {
         flag.Parse()
         
-        // Setup logger
+        // Setup logger - force to be less verbose if not debug
+        if *logLevel != "debug" {
+            *logLevel = "warn" // Only show warnings, errors, and balance results
+        }
         logger := utils.NewLogger(*logLevel)
         logger.Info("Starting wallet generator and balance checker")
         
@@ -88,9 +92,9 @@ func main() {
             }
         }
         
-        // Initialize balance checker with proxy support
+        // Initialize balance checker with proxy support and faster request delay
         balanceChecker := explorer.NewBalanceChecker(
-                *requestDelay,
+                *requestDelay,  // Use command line delay parameter
                 chainList,
                 logger,
         )
@@ -100,7 +104,7 @@ func main() {
             balanceChecker.SetProxyManager(proxyManager)
         }
         
-        // Setup worker pool
+        // Setup worker pool - use more workers for better performance
         numCores := runtime.NumCPU()
         maxWorkers := *maxGoroutines
         
@@ -109,16 +113,16 @@ func main() {
             // Use the configured value for proxies
             maxWorkers = maxConcurrent
             logger.Info(fmt.Sprintf("Using %d workers from env.txt configuration", maxWorkers))
-        } else if maxWorkers <= 0 || maxWorkers > numCores*8 {
-            // Default to number of cores x2 if not specified or too high
-            maxWorkers = numCores * 2
+        } else if *maxGoroutines <= 0 {
+            // Default to 4x cores if not specified for faster processing
+            maxWorkers = numCores * 4
         }
         
         logger.Info(fmt.Sprintf("Using %d worker goroutines", maxWorkers))
         
-        // Create work channels
-        walletChan := make(chan wallet.Wallet, *batchSize)
-        resultChan := make(chan wallet.WalletWithBalance, *batchSize)
+        // Create work channels with larger buffers for better throughput
+        walletChan := make(chan wallet.Wallet, *batchSize * 4)
+        resultChan := make(chan wallet.WalletWithBalance, *batchSize * 4)
         done := make(chan struct{})
         
         // Start worker pool
@@ -138,11 +142,12 @@ func main() {
                 }()
         }
         
-        // Start result handler
+        // Start result handler with simplified output
         go func() {
                 for result := range resultChan {
-                        logger.Info(fmt.Sprintf("Found wallet with balance: %s on %s: %s", 
-                                result.Address, result.Chain, result.Balance))
+                        // Only print the balance information without checking/debug info
+                        fmt.Printf("BALANCE FOUND: %s on %s: %s\n", 
+                                result.Address, result.Chain, result.Balance)
                         store.AddWallet(result)
                 }
                 close(done)
@@ -161,6 +166,7 @@ func main() {
         
         // Process wallet generation in batches
         batchNum := 0
+        startTime := time.Now()
         
         // Main loop - either runs until we reach the target, or forever in infinite mode
         for *infiniteMode || walletsProcessed < targetWallets {
@@ -179,8 +185,6 @@ func main() {
                         
                         batchNum++
                         
-                        logger.Debug(fmt.Sprintf("Processing batch %d (%d wallets)", batchNum, currentBatchSize))
-                        
                         // Generate and send wallets to workers
                         for i := 0; i < currentBatchSize; i++ {
                                 w := generator.GenerateWallet()
@@ -188,27 +192,28 @@ func main() {
                                 walletsProcessed++
                         }
                         
-                        // Periodically save results (every 10 batches by default)
-                        if batchNum%10 == 0 {
+                        // Only show periodic stats (every 50 batches or every 5000 wallets)
+                        if batchNum%50 == 0 {
                                 walletsWithBalance = store.Count()
+                                speed := float64(walletsProcessed) / time.Since(startTime).Seconds()
                                 
+                                // Only log processing speed stats at INFO level, not the checking details
                                 if *infiniteMode {
-                                        logger.Info(fmt.Sprintf("Progress: %d wallets checked so far, found %d with balance", 
-                                                walletsProcessed, walletsWithBalance))
+                                        logger.Info(fmt.Sprintf("Speed: %.2f wallets/sec | Processed: %d | Found: %d", 
+                                                speed, walletsProcessed, walletsWithBalance))
                                 } else {
-                                        logger.Info(fmt.Sprintf("Progress: %d/%d wallets checked, found %d with balance", 
-                                                walletsProcessed, targetWallets, walletsWithBalance))
+                                        logger.Info(fmt.Sprintf("Speed: %.2f wallets/sec | Progress: %d/%d | Found: %d", 
+                                                speed, walletsProcessed, targetWallets, walletsWithBalance))
                                 }
                                 
+                                // Save results
                                 err := store.Save()
                                 if err != nil {
                                         logger.Error(fmt.Sprintf("Error saving results: %v", err))
-                                } else {
-                                        logger.Debug("Saved intermediate results")
                                 }
                                 
-                                // If we're using proxies, log the proxy stats
-                                if proxyManager != nil {
+                                // If we're using proxies, log the proxy stats only in debug mode
+                                if proxyManager != nil && *logLevel == "debug" {
                                     activeProxies := proxyManager.GetActiveProxyCount()
                                     totalProxies := proxyManager.GetProxyCount()
                                     logger.Debug(fmt.Sprintf("Proxy stats: %d active / %d total", activeProxies, totalProxies))
@@ -220,6 +225,7 @@ func main() {
                                 logger.Info(fmt.Sprintf("Processed %d wallets, resetting counter", walletsProcessed))
                                 walletsProcessed = 0
                                 batchNum = 0
+                                startTime = time.Now() // Reset the timer too for accurate speed calculation
                         }
                 }
         }
