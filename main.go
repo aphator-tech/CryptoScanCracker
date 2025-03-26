@@ -6,6 +6,7 @@ import (
         "os"
         "os/signal"
         "runtime"
+        "strings"
         "sync"
         "syscall"
         "time"
@@ -31,12 +32,13 @@ var (
 func main() {
         flag.Parse()
         
-        // Setup logger - force to be less verbose if not debug
+        // Setup logger - force to be less verbose, only showing balances and critical errors
+        // We're overriding the log level to make output cleaner
         if *logLevel != "debug" {
             *logLevel = "warn" // Only show warnings, errors, and balance results
         }
         logger := utils.NewLogger(*logLevel)
-        logger.Info("Starting wallet generator and balance checker")
+        logger.Info(utils.ColorCyan("💼 Crypto Wallet Balance Checker Started"))
         
         // Setup signal handling for graceful shutdown
         sigChan := make(chan os.Signal, 1)
@@ -59,10 +61,10 @@ func main() {
         }
         
         if len(chainNames) == 0 {
-            logger.Warn("No chains enabled! Falling back to all chains.")
-            for _, chain := range explorer.GetChainList("all") {
-                chainNames = append(chainNames, chain.Name)
-            }
+            // Just use a subset of chains to avoid rate limiting and improve performance
+            logger.Warn("Using a subset of faster chains to avoid rate limits")
+            // Only use chains that don't rate limit as much, including Bitcoin
+            chainNames = []string{"bitcoin", "binance", "polygon", "avalanche", "fantom", "celo"}
         }
         
         // Convert chain names to ChainInfo objects
@@ -142,12 +144,36 @@ func main() {
                 }()
         }
         
-        // Start result handler with simplified output
+        // Start result handler with colorful, simplified output
         go func() {
                 for result := range resultChan {
-                        // Only print the balance information without checking/debug info
-                        fmt.Printf("BALANCE FOUND: %s on %s: %s\n", 
-                                result.Address, result.Chain, result.Balance)
+                        // Use colorful output with emoji indicators for wallet type
+                        
+                        // Choose emoji based on chain type
+                        walletEmoji := "💰" // Default emoji
+                        
+                        // Add special emojis for different chain types
+                        if result.ChainType == "bitcoin" {
+                            walletEmoji = "₿"  // Bitcoin symbol
+                        } else if strings.EqualFold(result.Chain, "ethereum") {
+                            walletEmoji = "Ξ"  // Ethereum symbol
+                        } else if strings.EqualFold(result.Chain, "binance") {
+                            walletEmoji = "🟨" // Yellow for Binance
+                        } else if strings.EqualFold(result.Chain, "polygon") {
+                            walletEmoji = "🟪" // Purple for Polygon
+                        } else if strings.EqualFold(result.Chain, "avalanche") {
+                            walletEmoji = "🔺" // Red triangle for Avalanche
+                        } else if strings.EqualFold(result.Chain, "fantom") {
+                            walletEmoji = "👻" // Ghost for Fantom
+                        }
+                        
+                        // Green for the chain name, yellow for the address, and cyan for the balance
+                        fmt.Printf("%s %s: %s = %s\n", 
+                                walletEmoji,
+                                utils.ColorGreen(result.Chain), 
+                                utils.ColorYellow(result.Address), 
+                                utils.ColorCyan(result.Balance))
+                        
                         store.AddWallet(result)
                 }
                 close(done)
@@ -253,7 +279,8 @@ cleanup:
 
 // getEnabledChainsFromEnv reads chain configuration from env.txt
 func getEnabledChainsFromEnv(logger *utils.Logger) []string {
-    allChains := []string{"ethereum", "binance", "polygon", "avalanche", "fantom", "optimism", "arbitrum", "base", "celo"}
+    // Updated to include Bitcoin as the first chain in the list
+    allChains := []string{"bitcoin", "ethereum", "binance", "polygon", "avalanche", "fantom", "optimism", "arbitrum", "base", "celo"}
     enabledChains := []string{}
     
     for _, chain := range allChains {

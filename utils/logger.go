@@ -147,3 +147,35 @@ func (l *Logger) PrintBanner(appName, version string) {
         
         fmt.Println(banner)
 }
+
+// Color utility functions for consistent formatting
+
+// ColorGreen returns the string colored green
+func ColorGreen(text string) string {
+        return color.GreenString(text)
+}
+
+// ColorRed returns the string colored red
+func ColorRed(text string) string {
+        return color.RedString(text)
+}
+
+// ColorYellow returns the string colored yellow
+func ColorYellow(text string) string {
+        return color.YellowString(text)
+}
+
+// ColorCyan returns the string colored cyan
+func ColorCyan(text string) string {
+        return color.CyanString(text)
+}
+
+// ColorMagenta returns the string colored magenta
+func ColorMagenta(text string) string {
+        return color.MagentaString(text)
+}
+
+// ColorBlue returns the string colored blue
+func ColorBlue(text string) string {
+        return color.BlueString(text)
+}

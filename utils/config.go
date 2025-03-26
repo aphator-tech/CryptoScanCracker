@@ -2,6 +2,9 @@ package utils
 
 import (
         "bufio"
+        "crypto"
+        "crypto/rand"
+        "math/big"
         "os"
         "strconv"
         "strings"
@@ -142,4 +145,27 @@ func GetRuntimeBool(key string) (bool, bool) {
         
         val = strings.TrimSpace(strings.ToLower(val))
         return val == "true" || val == "1" || val == "yes" || val == "y", true
+}
+
+// GetRandomInt returns a cryptographically secure random integer between min and max (inclusive)
+func GetRandomInt(min, max int) int {
+        // Create a range for the random number
+        delta := max - min + 1
+        
+        // Generate a random number using crypto/rand
+        n, err := rand.Int(rand.Reader, big.NewInt(int64(delta)))
+        if err != nil {
+                // Fallback to a simple deterministic value if random fails
+                return min
+        }
+        
+        // Convert to int and add min to get the final value
+        return min + int(n.Int64())
+}
+
+// Sha256Hash computes the SHA-256 hash of the given data
+func Sha256Hash(data []byte) []byte {
+        hasher := crypto.SHA256.New()
+        hasher.Write(data)
+        return hasher.Sum(nil)
 }

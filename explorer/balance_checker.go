@@ -14,22 +14,26 @@ import (
 
 // BalanceChecker checks wallet balances across blockchain explorers
 type BalanceChecker struct {
-        requestDelay int
-        chains       []ChainInfo
-        httpClient   *utils.HTTPClient
-        logger       *utils.Logger
-        proxyManager *utils.ProxyManager
+        requestDelay    int
+        chains          []ChainInfo
+        httpClient      *utils.HTTPClient
+        logger          *utils.Logger
+        proxyManager    *utils.ProxyManager
+        rateLimitedChains map[string]time.Time  // Map tracking which chains are rate limited and when to retry
+        rateLimitMutex   sync.RWMutex           // Mutex for thread-safe access to rate limit map
 }
 
 // NewBalanceChecker creates a new balance checker instance
 func NewBalanceChecker(requestDelay int, chains []ChainInfo, logger *utils.Logger) *BalanceChecker {
         client := utils.NewHTTPClient()
         return &BalanceChecker{
-                requestDelay: requestDelay,
-                chains:       chains,
-                httpClient:   client,
-                logger:       logger,
-                proxyManager: nil,
+                requestDelay:      requestDelay,
+                chains:            chains,
+                httpClient:        client,
+                logger:            logger,
+                proxyManager:      nil,
+                rateLimitedChains: make(map[string]time.Time),
+                rateLimitMutex:    sync.RWMutex{},
         }
 }
 
@@ -58,8 +62,26 @@ func (bc *BalanceChecker) CheckWalletBalances(w wallet.Wallet) []wallet.WalletWi
         var wg sync.WaitGroup
         resultsMutex := &sync.Mutex{}
         
-        // Check each chain in parallel
+        // Check each chain in parallel, but skip rate-limited ones
         for i, chain := range bc.chains {
+            // Skip this chain if it's currently rate-limited
+            bc.rateLimitMutex.RLock()
+            retryTime, isRateLimited := bc.rateLimitedChains[chain.Name]
+            bc.rateLimitMutex.RUnlock()
+            
+            // If the chain is rate-limited but the cool-down period has elapsed, remove it
+            if isRateLimited && time.Now().After(retryTime) {
+                bc.rateLimitMutex.Lock()
+                delete(bc.rateLimitedChains, chain.Name)
+                bc.rateLimitMutex.Unlock()
+                isRateLimited = false
+            }
+            
+            // Skip this chain if it's still rate-limited
+            if isRateLimited {
+                continue
+            }
+            
             wg.Add(1)
             go func(idx int, c ChainInfo) {
                 defer wg.Done()
@@ -83,6 +105,18 @@ func (bc *BalanceChecker) CheckWalletBalances(w wallet.Wallet) []wallet.WalletWi
 
 // checkBalanceOnChain checks a wallet's balance on a specific blockchain
 func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) wallet.WalletWithBalance {
+        // First, validate the address for this specific chain type
+        if !bc.IsValidAddress(w.Address, chain) {
+            // Skip checking chains if the address format doesn't match the chain type
+            return wallet.WalletWithBalance{
+                Address:    w.Address,
+                PrivateKey: w.PrivateKey,
+                Chain:      chain.Name,
+                Balance:    "0",
+                HasBalance: false,
+            }
+        }
+        
         // Create the URL for the address on this explorer
         url := fmt.Sprintf(chain.AddressURL, w.Address)
         
@@ -101,14 +135,21 @@ func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) 
                 time.Sleep(time.Duration(chain.ExtraDelay) * time.Millisecond)
         }
         
-        // Only log in debug mode to reduce output clutter
-        bc.logger.Debug(fmt.Sprintf("Checking balance on %s: %s", chain.Name, w.Address))
-        
         // Make the HTTP request with optimized error handling
         html, err := bc.httpClient.Get(url, chain.UserAgent)
         if err != nil {
-                // Only log errors in debug mode for cleaner output
-                bc.logger.Debug(fmt.Sprintf("Error checking balance on %s: %v", chain.Name, err))
+                // Check if it's a rate limit error (status code 429 or other indicators)
+                if strings.Contains(err.Error(), "429") || 
+                   strings.Contains(err.Error(), "too many requests") ||
+                   strings.Contains(err.Error(), "rate limit") {
+                    // Temporarily disable this chain for 60 seconds
+                    bc.rateLimitMutex.Lock()
+                    bc.rateLimitedChains[chain.Name] = time.Now().Add(60 * time.Second)
+                    bc.rateLimitMutex.Unlock()
+                    
+                    // Log the rate limit once at WARN level (not DEBUG)
+                    bc.logger.Warn(fmt.Sprintf("🚫 Rate limit hit on %s chain - disabling for 60 seconds", chain.Name))
+                }
                 return result
         }
         
@@ -130,6 +171,13 @@ func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) 
         // Update the result
         result.Balance = balance
         result.HasBalance = balanceFloat > 0
+        
+        // Set the chain type based on whether this is an EVM chain or not
+        if chain.IsEVM {
+            result.ChainType = "evm"
+        } else if chain.Name == "bitcoin" {
+            result.ChainType = "bitcoin"
+        }
         
         // If balance is found, it will be shown in the main output, 
         // no need to duplicate the log here
@@ -218,20 +266,56 @@ func (bc *BalanceChecker) fallbackBalanceParsing(html string) (string, error) {
         return "", fmt.Errorf("could not find balance in the HTML")
 }
 
-// IsValidAddress checks if an address is a valid EVM address
-func (bc *BalanceChecker) IsValidAddress(address string) bool {
-        // EVM addresses are 42 characters (0x + 40 hex characters)
-        if len(address) != 42 || !strings.HasPrefix(address, "0x") {
+// IsValidAddress checks if an address is valid for the specified chain
+func (bc *BalanceChecker) IsValidAddress(address string, chain ChainInfo) bool {
+        if chain.IsEVM {
+                // EVM addresses are 42 characters (0x + 40 hex characters)
+                if len(address) != 42 || !strings.HasPrefix(address, "0x") {
+                        return false
+                }
+                
+                // Check if the address contains only hex characters after 0x
+                hexPart := address[2:]
+                for _, c := range hexPart {
+                        if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+                                return false
+                        }
+                }
+                
+                return true
+        } else if chain.Name == "bitcoin" {
+                // Bitcoin addresses can be legacy (P2PKH), P2SH, or Bech32 (SegWit)
+                
+                // Legacy bitcoin addresses start with 1 and are 26-35 characters
+                if strings.HasPrefix(address, "1") && len(address) >= 26 && len(address) <= 35 {
+                        return true
+                }
+                
+                // P2SH addresses start with 3 and are 26-35 characters 
+                if strings.HasPrefix(address, "3") && len(address) >= 26 && len(address) <= 35 {
+                        return true
+                }
+                
+                // Bech32 (SegWit) addresses start with bc1 and are longer
+                if strings.HasPrefix(address, "bc1") && len(address) >= 14 && len(address) <= 74 {
+                        return true
+                }
+                
                 return false
         }
         
-        // Check if the address contains only hex characters after 0x
-        hexPart := address[2:]
-        for _, c := range hexPart {
-                if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-                        return false
+        // If it's not a known chain type, be permissive
+        return true
+}
+
+// IsValidAddressForAnyChain checks if an address is valid for any supported chain
+func (bc *BalanceChecker) IsValidAddressForAnyChain(address string) bool {
+        // Check if it's valid for at least one chain
+        for _, chain := range bc.chains {
+                if bc.IsValidAddress(address, chain) {
+                        return true
                 }
         }
         
-        return true
+        return false
 }

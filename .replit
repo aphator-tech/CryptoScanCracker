@@ -13,10 +13,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "crypto_wallet_checker"
+args = "Crypto Wallet Explorer"
 
 [[workflows.workflow]]
-name = "crypto_wallet_checker"
+name = "Crypto Wallet Explorer"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -27,7 +27,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "go run main.go --wallets 10 --batch 5 --delay 500 --log debug"
+args = "go run main.go --wallets 50 --batch 15 --delay 10 --chains \"bitcoin,binance,polygon,avalanche,fantom\" --log warn"
 
 [deployment]
 run = ["sh", "-c", "go run main.go --wallets 5 --batch 2 --delay 500 --log debug"]

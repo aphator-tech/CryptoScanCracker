@@ -4,7 +4,7 @@ import (
         "strings"
 )
 
-// ChainInfo contains information about an EVM compatible blockchain
+// ChainInfo contains information about a blockchain (EVM or non-EVM)
 type ChainInfo struct {
         Name           string
         ExplorerURL    string
@@ -13,10 +13,21 @@ type ChainInfo struct {
         UserAgent      string
         ExtraDelay     int    // Additional delay in milliseconds for this specific chain
         Enabled        bool   // Whether this chain is enabled
+        IsEVM          bool   // Whether this is an EVM chain (affects address validation)
 }
 
-// List of supported EVM chains with their explorer URLs
+// List of supported chains (both EVM and non-EVM) with their explorer URLs
 var supportedChains = []ChainInfo{
+        {
+                Name:           "bitcoin",
+                ExplorerURL:    "https://www.blockchain.com",
+                AddressURL:     "https://www.blockchain.com/explorer/addresses/btc/%s",
+                BalancePattern: `<div class="sc-e84d5373-0 jxiiZX">([0-9]*\.?[0-9]+) BTC</div>`,
+                UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
+                IsEVM:          false,
+        },
         {
                 Name:           "ethereum",
                 ExplorerURL:    "https://etherscan.io",
@@ -26,6 +37,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "binance",
@@ -35,6 +47,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "polygon",
@@ -44,6 +57,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "fantom",
@@ -53,6 +67,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "avalanche",
@@ -62,6 +77,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "optimism",
@@ -71,6 +87,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "arbitrum",
@@ -80,6 +97,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
                 ExtraDelay:     1000, // Extra 1 second delay for this chain
                 Enabled:        false, // Temporarily disable due to 403 errors
+                IsEVM:          true,
         },
         {
                 Name:           "celo",
@@ -89,6 +107,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 ExtraDelay:     0,
                 Enabled:        true,
+                IsEVM:          true,
         },
         {
                 Name:           "base",
@@ -98,6 +117,7 @@ var supportedChains = []ChainInfo{
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
                 ExtraDelay:     1000, // Extra 1 second delay for this chain
                 Enabled:        false, // Temporarily disable due to 403 errors
+                IsEVM:          true,
         },
 }
 
