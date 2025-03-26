@@ -58,6 +58,11 @@ func (bc *BalanceChecker) checkBalanceOnChain(w wallet.Wallet, chain ChainInfo) 
                 HasBalance: false,
         }
         
+        // Apply chain-specific extra delay if needed
+        if chain.ExtraDelay > 0 {
+                time.Sleep(time.Duration(chain.ExtraDelay) * time.Millisecond)
+        }
+        
         // Make the HTTP request
         bc.logger.Debug(fmt.Sprintf("Checking balance on %s: %s", chain.Name, w.Address))
         

@@ -5,6 +5,7 @@ import (
         "fmt"
         "io"
         "net/http"
+        "strings"
         "time"
 )
 
@@ -34,7 +35,18 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
         maxRetries := 3
         var lastErr error
         
+        // Check if this is a specific explorer with stronger bot protection
+        isArbitrumOrBase := false
+        if url != "" && (strings.Contains(url, "arbiscan.io") || strings.Contains(url, "basescan.org")) {
+                isArbitrumOrBase = true
+                maxRetries = 5 // More retries for these sites
+        }
+        
         for attempt := 0; attempt < maxRetries; attempt++ {
+                // Random delay between 100-300ms to make requests look more human
+                randomDelay := 100 + (time.Now().UnixNano() % 200)
+                time.Sleep(time.Duration(randomDelay) * time.Millisecond)
+                
                 // Create a new request
                 req, err := http.NewRequest("GET", url, nil)
                 if err != nil {
@@ -56,14 +68,32 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 req.Header.Set("DNT", "1")
                 req.Header.Set("Pragma", "no-cache")
                 
-                // Randomize the referrer slightly to look more legitimate
-                referrers := []string{
-                        "https://www.google.com/",
-                        "https://search.brave.com/",
-                        "https://duckduckgo.com/",
-                        "https://www.bing.com/",
+                // For Arbitrum and Base, add extra headers that might help bypass protections
+                if isArbitrumOrBase {
+                    req.Header.Set("sec-ch-ua", "\"Chromium\";v=\"112\", \"Google Chrome\";v=\"112\", \"Not:A-Brand\";v=\"99\"")
+                    req.Header.Set("sec-ch-ua-mobile", "?0")
+                    req.Header.Set("sec-ch-ua-platform", "\"Windows\"")
+                    
+                    // Larger set of possible referrers for these sites
+                    advancedReferrers := []string{
+                        "https://www.google.com/search?q=arbitrum+explorer",
+                        "https://www.google.com/search?q=base+blockchain+explorer",
+                        "https://twitter.com/arbitrum",
+                        "https://coinmarketcap.com/currencies/arbitrum/",
+                        "https://etherscan.io/",
+                        "https://ethereum.org/en/",
+                    }
+                    req.Header.Set("Referer", advancedReferrers[attempt%len(advancedReferrers)])
+                } else {
+                    // Standard referrers for other explorers
+                    referrers := []string{
+                            "https://www.google.com/",
+                            "https://search.brave.com/",
+                            "https://duckduckgo.com/",
+                            "https://www.bing.com/",
+                    }
+                    req.Header.Set("Referer", referrers[attempt%len(referrers)])
                 }
-                req.Header.Set("Referer", referrers[attempt%len(referrers)])
                 
                 // Perform the request
                 resp, err := c.client.Do(req)
@@ -81,7 +111,12 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                         if resp.StatusCode == http.StatusForbidden || 
                            resp.StatusCode == http.StatusTooManyRequests || 
                            resp.StatusCode >= 500 {
-                                time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                                // More aggressive backoff for stronger anti-bot sites
+                                if isArbitrumOrBase {
+                                    time.Sleep(time.Duration(1000*(attempt+1)) * time.Millisecond)
+                                } else {
+                                    time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                                }
                                 continue
                         }
                         return "", lastErr
@@ -91,6 +126,16 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 body, err := io.ReadAll(resp.Body)
                 if err != nil {
                         return "", fmt.Errorf("error reading response body: %v", err)
+                }
+                
+                // If there's any indication of Cloudflare or other protection in the HTML,
+                // we might need to retry with a different approach
+                if isArbitrumOrBase && (bytes.Contains(body, []byte("Cloudflare")) || 
+                   bytes.Contains(body, []byte("challenge")) || 
+                   bytes.Contains(body, []byte("captcha"))) {
+                        lastErr = fmt.Errorf("detected bot protection page")
+                        time.Sleep(time.Duration(1000*(attempt+1)) * time.Millisecond)
+                        continue
                 }
                 
                 return string(body), nil

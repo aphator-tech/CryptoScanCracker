@@ -11,6 +11,8 @@ type ChainInfo struct {
         AddressURL     string
         BalancePattern string
         UserAgent      string
+        ExtraDelay     int    // Additional delay in milliseconds for this specific chain
+        Enabled        bool   // Whether this chain is enabled
 }
 
 // List of supported EVM chains with their explorer URLs
@@ -22,6 +24,8 @@ var supportedChains = []ChainInfo{
                 // More flexible pattern that works with different variations of Etherscan display
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) ETH</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "binance",
@@ -29,6 +33,8 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://bscscan.com/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) BNB</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "polygon",
@@ -36,6 +42,8 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://polygonscan.com/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) MATIC</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "fantom",
@@ -43,6 +51,8 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://ftmscan.com/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) FTM</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "avalanche",
@@ -50,6 +60,8 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://snowtrace.io/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) AVAX</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "optimism",
@@ -57,13 +69,17 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://optimistic.etherscan.io/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) ETH</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "arbitrum",
                 ExplorerURL:    "https://arbiscan.io",
                 AddressURL:     "https://arbiscan.io/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) ETH</span>`,
-                UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+                ExtraDelay:     1000, // Extra 1 second delay for this chain
+                Enabled:        false, // Temporarily disable due to 403 errors
         },
         {
                 Name:           "celo",
@@ -71,21 +87,33 @@ var supportedChains = []ChainInfo{
                 AddressURL:     "https://celoscan.io/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) CELO</span>`,
                 UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ExtraDelay:     0,
+                Enabled:        true,
         },
         {
                 Name:           "base",
                 ExplorerURL:    "https://basescan.org",
                 AddressURL:     "https://basescan.org/address/%s",
                 BalancePattern: `(?:<div class="card-body">|<span class="text-muted">Balance</span>)[\s\S]*?<span[^>]*>(\d+(?:\.\d+)?) ETH</span>`,
-                UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+                ExtraDelay:     1000, // Extra 1 second delay for this chain
+                Enabled:        false, // Temporarily disable due to 403 errors
         },
 }
 
 // GetChainList returns a list of ChainInfo based on comma-separated chain names
-// If "all" is specified, all supported chains are returned
+// If "all" is specified, all supported and enabled chains are returned
 func GetChainList(chainsArg string) []ChainInfo {
+        // Filter to only include enabled chains
+        var enabledChains []ChainInfo
+        for _, chain := range supportedChains {
+                if chain.Enabled {
+                        enabledChains = append(enabledChains, chain)
+                }
+        }
+        
         if chainsArg == "all" {
-                return supportedChains
+                return enabledChains
         }
         
         chainNames := strings.Split(chainsArg, ",")
@@ -93,7 +121,7 @@ func GetChainList(chainsArg string) []ChainInfo {
         
         for _, name := range chainNames {
                 name = strings.TrimSpace(strings.ToLower(name))
-                for _, chain := range supportedChains {
+                for _, chain := range enabledChains {
                         if chain.Name == name {
                                 selectedChains = append(selectedChains, chain)
                                 break
@@ -101,9 +129,9 @@ func GetChainList(chainsArg string) []ChainInfo {
                 }
         }
         
-        // If no valid chains were selected, return all
+        // If no valid chains were selected, return all enabled chains
         if len(selectedChains) == 0 {
-                return supportedChains
+                return enabledChains
         }
         
         return selectedChains
