@@ -70,27 +70,35 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 maxRetries = 5 // More retries for these sites
         }
         
-        // If we have a proxy manager, use it
+        // If we have a proxy manager, check if we should use it
         var currentProxy *Proxy
         var proxyClient *http.Client
         var usingProxy bool
         
         if c.proxyManager != nil && c.proxyManager.IsEnabled() {
-                // Get a proxy
-                proxy, err := c.proxyManager.GetNextProxy()
-                if err != nil {
-                        c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
-                } else if proxy != nil {
-                        currentProxy = proxy
-                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                // Check if we've hit rate limits yet
+                rateLimitHit, _ := GetRuntimeBool("RATE_LIMIT_HIT")
+                
+                // Only use proxies if rate limits have been hit or if we're forced to use them
+                if rateLimitHit {
+                        // Get a proxy
+                        proxy, err := c.proxyManager.GetNextProxy()
                         if err != nil {
-                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
-                                c.proxyManager.ReleaseProxy(proxy, false)
-                                currentProxy = nil
-                        } else {
-                                usingProxy = true
-                                c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                                c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
+                        } else if proxy != nil {
+                                currentProxy = proxy
+                                proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                if err != nil {
+                                        c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                        c.proxyManager.ReleaseProxy(proxy, false)
+                                        currentProxy = nil
+                                } else {
+                                        usingProxy = true
+                                        c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                                }
                         }
+                } else {
+                        c.logger.Debug("Not using proxies yet (waiting for rate limit to be hit)")
                 }
         }
         
@@ -193,6 +201,32 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 // Check status code
                 if resp.StatusCode != http.StatusOK {
                         lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+                        
+                        // Check if this is a rate limit response (429 Too Many Requests or 403 Forbidden)
+                        if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusForbidden {
+                            // Detect rate limit and switch to proxy mode if we're not already using one
+                            if !usingProxy && c.proxyManager != nil && c.proxyManager.IsEnabled() {
+                                c.logger.Info("Rate limit detected! Switching to proxy mode...")
+                                SetRuntimeValue("RATE_LIMIT_HIT", "true")
+                                
+                                // Get a proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                    c.logger.Debug(fmt.Sprintf("Failed to get proxy after rate limit: %v", err))
+                                } else {
+                                    currentProxy = proxy
+                                    proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                    if err != nil {
+                                        c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                        c.proxyManager.ReleaseProxy(proxy, false)
+                                        currentProxy = nil
+                                    } else {
+                                        usingProxy = true
+                                        c.logger.Info(fmt.Sprintf("Switched to proxy after rate limit: %s", proxy.URL))
+                                    }
+                                }
+                            }
+                        }
                         
                         // If using proxy and got a bad status, try a different proxy
                         if usingProxy && currentProxy != nil && (resp.StatusCode == http.StatusForbidden || 
@@ -303,27 +337,35 @@ func (c *HTTPClient) Post(url, userAgent, contentType string, body []byte) (stri
         maxRetries := 3
         var lastErr error
         
-        // If we have a proxy manager, use it
+        // If we have a proxy manager, check if we should use it
         var currentProxy *Proxy
         var proxyClient *http.Client
         var usingProxy bool
         
         if c.proxyManager != nil && c.proxyManager.IsEnabled() {
-                // Get a proxy
-                proxy, err := c.proxyManager.GetNextProxy()
-                if err != nil {
-                        c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
-                } else if proxy != nil {
-                        currentProxy = proxy
-                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                // Check if we've hit rate limits yet
+                rateLimitHit, _ := GetRuntimeBool("RATE_LIMIT_HIT")
+                
+                // Only use proxies if rate limits have been hit or if we're forced to use them
+                if rateLimitHit {
+                        // Get a proxy
+                        proxy, err := c.proxyManager.GetNextProxy()
                         if err != nil {
-                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
-                                c.proxyManager.ReleaseProxy(proxy, false)
-                                currentProxy = nil
-                        } else {
-                                usingProxy = true
-                                c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                                c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
+                        } else if proxy != nil {
+                                currentProxy = proxy
+                                proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                if err != nil {
+                                        c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                        c.proxyManager.ReleaseProxy(proxy, false)
+                                        currentProxy = nil
+                                } else {
+                                        usingProxy = true
+                                        c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                                }
                         }
+                } else {
+                        c.logger.Debug("Not using proxies yet (waiting for rate limit to be hit)")
                 }
         }
         
