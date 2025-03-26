@@ -78,9 +78,10 @@ func main() {
         }
         
         // Convert chain names to ChainInfo objects
+        logger.Info(fmt.Sprintf("Attempting to get ChainInfo for chains: %v", chainNames))
         chainList := explorer.GetChainsByNames(chainNames)
         
-        logger.Info(fmt.Sprintf("Checking balances on %d chains", len(chainList)))
+        logger.Info(fmt.Sprintf("Checking balances on %d chains: %v", len(chainList), getChainNames(chainList)))
         
         // Initialize wallet generator
         generator := wallet.NewGenerator(logger)
@@ -228,19 +229,70 @@ func main() {
                                 walletsProcessed++
                         }
                         
-                        // Only show periodic stats (every 50 batches or every 5000 wallets)
-                        if batchNum%50 == 0 {
+                        // Show periodic stats (every 5 batches for better feedback)
+                        if batchNum%5 == 0 {
                                 walletsWithBalance = store.Count()
                                 speed := float64(walletsProcessed) / time.Since(startTime).Seconds()
                                 
-                                // Only log processing speed stats at INFO level, not the checking details
+                                // Calculate progress percentage
+                                var progressPercent float64
                                 if *infiniteMode {
-                                        logger.Info(fmt.Sprintf("Speed: %.2f wallets/sec | Processed: %d | Found: %d", 
-                                                speed, walletsProcessed, walletsWithBalance))
+                                    progressPercent = float64(batchNum % 100) // Just for visual in infinite mode
                                 } else {
-                                        logger.Info(fmt.Sprintf("Speed: %.2f wallets/sec | Progress: %d/%d | Found: %d", 
-                                                speed, walletsProcessed, targetWallets, walletsWithBalance))
+                                    progressPercent = float64(walletsProcessed) / float64(targetWallets) * 100
                                 }
+                                
+                                // Create a fancy progress bar
+                                progressBar := "["
+                                barLength := 20
+                                filledLength := int(float64(barLength) * progressPercent / 100)
+                                
+                                for i := 0; i < barLength; i++ {
+                                    if i < filledLength {
+                                        progressBar += "■" // Filled block
+                                    } else {
+                                        progressBar += "□" // Empty block
+                                    }
+                                }
+                                progressBar += "]"
+                                
+                                // Choose emoji based on speed
+                                speedEmoji := "🚀" // Default fast
+                                if speed < 5 {
+                                    speedEmoji = "🐢" // Slow
+                                } else if speed < 20 {
+                                    speedEmoji = "🚶" // Medium
+                                } else if speed < 50 {
+                                    speedEmoji = "🏃" // Fast
+                                }
+                                
+                                // Fancy colorful output
+                                var statusLine string
+                                if *infiniteMode {
+                                    statusLine = fmt.Sprintf("%s %s %s %.1f%% | %s Speed: %.1f w/s | Checked: %s | Found: %s", 
+                                        utils.ColorCyan("🔍"), 
+                                        progressBar,
+                                        utils.ColorYellow(fmt.Sprintf("%.1f%%", progressPercent)),
+                                        progressPercent,
+                                        speedEmoji,
+                                        speed,
+                                        utils.ColorMagenta(fmt.Sprintf("%d", walletsProcessed)),
+                                        utils.ColorGreen(fmt.Sprintf("%d", walletsWithBalance)))
+                                } else {
+                                    statusLine = fmt.Sprintf("%s %s %s %.1f%% | %s Speed: %.1f w/s | Progress: %s/%s | Found: %s", 
+                                        utils.ColorCyan("🔍"), 
+                                        progressBar,
+                                        utils.ColorYellow(fmt.Sprintf("%.1f%%", progressPercent)),
+                                        progressPercent,
+                                        speedEmoji,
+                                        speed,
+                                        utils.ColorMagenta(fmt.Sprintf("%d", walletsProcessed)),
+                                        utils.ColorBlue(fmt.Sprintf("%d", targetWallets)),
+                                        utils.ColorGreen(fmt.Sprintf("%d", walletsWithBalance)))
+                                }
+                                
+                                // Print directly to console for visibility regardless of log level
+                                fmt.Println(statusLine)
                                 
                                 // Save results
                                 err := store.Save()
@@ -248,11 +300,13 @@ func main() {
                                         logger.Error(fmt.Sprintf("Error saving results: %v", err))
                                 }
                                 
-                                // If we're using proxies, log the proxy stats only in debug mode
-                                if proxyManager != nil && *logLevel == "debug" {
+                                // If we're using proxies, log the proxy stats
+                                if proxyManager != nil {
                                     activeProxies := proxyManager.GetActiveProxyCount()
                                     totalProxies := proxyManager.GetProxyCount()
-                                    logger.Debug(fmt.Sprintf("Proxy stats: %d active / %d total", activeProxies, totalProxies))
+                                    if activeProxies < totalProxies/2 {
+                                        fmt.Println(utils.ColorYellow(fmt.Sprintf("ℹ️ Proxy status: %d active / %d total", activeProxies, totalProxies)))
+                                    }
                                 }
                         }
                         
@@ -311,4 +365,13 @@ func min(a, b int) int {
                 return a
         }
         return b
+}
+
+// getChainNames extracts the names of chains from a list of ChainInfo
+func getChainNames(chains []explorer.ChainInfo) []string {
+        names := make([]string, len(chains))
+        for i, chain := range chains {
+                names[i] = chain.Name
+        }
+        return names
 }
