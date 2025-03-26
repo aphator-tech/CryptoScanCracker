@@ -41,26 +41,79 @@ func main() {
         // Initialize JSON store
         store := storage.NewJSONStore(*outputFile)
         
-        // Parse chains to check
-        chainList := explorer.GetChainList(*selectedChains)
+        // Parse chains to check - use env.txt settings if available
+        var chainNames []string
+        if useEnvSettings, ok := utils.ReadEnvBool("USE_ENV_CHAINS"); ok && useEnvSettings {
+            // Get chain list from env.txt
+            logger.Info("Using chain configuration from env.txt")
+            chainNames = getEnabledChainsFromEnv(logger)
+        } else {
+            // Use command line arguments for chain names
+            for _, chain := range explorer.GetChainList(*selectedChains) {
+                chainNames = append(chainNames, chain.Name)
+            }
+        }
+        
+        if len(chainNames) == 0 {
+            logger.Warn("No chains enabled! Falling back to all chains.")
+            for _, chain := range explorer.GetChainList("all") {
+                chainNames = append(chainNames, chain.Name)
+            }
+        }
+        
+        // Convert chain names to ChainInfo objects
+        chainList := explorer.GetChainsByNames(chainNames)
+        
         logger.Info(fmt.Sprintf("Checking balances on %d chains", len(chainList)))
         
         // Initialize wallet generator
         generator := wallet.NewGenerator(logger)
         
-        // Initialize balance checker
+        // Initialize proxy manager if enabled
+        var proxyManager *utils.ProxyManager
+        if useProxies, ok := utils.ReadEnvBool("USE_PROXIES"); ok && useProxies {
+            proxyUrl, proxyOk := utils.ReadEnv("PROXY_URL")
+            if proxyOk && proxyUrl != "" {
+                logger.Info("Initializing proxy support...")
+                proxyManager = utils.NewProxyManager(proxyUrl, true, logger)
+                proxyCount := proxyManager.GetProxyCount()
+                if proxyCount > 0 {
+                    logger.Info(fmt.Sprintf("Successfully loaded %d proxies", proxyCount))
+                } else {
+                    logger.Warn("Failed to load proxies, continuing without proxies")
+                    proxyManager = nil
+                }
+            } else {
+                logger.Warn("Proxy support enabled but no PROXY_URL specified, continuing without proxies")
+            }
+        }
+        
+        // Initialize balance checker with proxy support
         balanceChecker := explorer.NewBalanceChecker(
                 *requestDelay,
                 chainList,
                 logger,
         )
         
+        // Set proxy manager if available
+        if proxyManager != nil {
+            balanceChecker.SetProxyManager(proxyManager)
+        }
+        
         // Setup worker pool
         numCores := runtime.NumCPU()
         maxWorkers := *maxGoroutines
-        if maxWorkers <= 0 || maxWorkers > numCores*2 {
-                maxWorkers = numCores
+        
+        // Check if we have a value in env.txt
+        if maxConcurrent, ok := utils.ReadEnvInt("MAX_CONCURRENT_PROXIES"); ok && proxyManager != nil {
+            // Use the configured value for proxies
+            maxWorkers = maxConcurrent
+            logger.Info(fmt.Sprintf("Using %d workers from env.txt configuration", maxWorkers))
+        } else if maxWorkers <= 0 || maxWorkers > numCores*8 {
+            // Default to number of cores x2 if not specified or too high
+            maxWorkers = numCores * 2
         }
+        
         logger.Info(fmt.Sprintf("Using %d worker goroutines", maxWorkers))
         
         // Create work channels
@@ -153,6 +206,13 @@ func main() {
                                 } else {
                                         logger.Debug("Saved intermediate results")
                                 }
+                                
+                                // If we're using proxies, log the proxy stats
+                                if proxyManager != nil {
+                                    activeProxies := proxyManager.GetActiveProxyCount()
+                                    totalProxies := proxyManager.GetProxyCount()
+                                    logger.Debug(fmt.Sprintf("Proxy stats: %d active / %d total", activeProxies, totalProxies))
+                                }
                         }
                         
                         // If we've reached the initial target in infinite mode, reset the counter to avoid integer overflow
@@ -183,6 +243,24 @@ cleanup:
         }
         
         logger.Info(fmt.Sprintf("Results saved to %s", *outputFile))
+}
+
+// getEnabledChainsFromEnv reads chain configuration from env.txt
+func getEnabledChainsFromEnv(logger *utils.Logger) []string {
+    allChains := []string{"ethereum", "binance", "polygon", "avalanche", "fantom", "optimism", "arbitrum", "base", "celo"}
+    enabledChains := []string{}
+    
+    for _, chain := range allChains {
+        if enabled, ok := utils.ReadEnvBool(chain); ok && enabled {
+            // Convert to uppercase first letter for consistency
+            enabledChains = append(enabledChains, chain)
+            logger.Debug(fmt.Sprintf("Chain enabled: %s", chain))
+        } else {
+            logger.Debug(fmt.Sprintf("Chain disabled: %s", chain))
+        }
+    }
+    
+    return enabledChains
 }
 
 func min(a, b int) int {

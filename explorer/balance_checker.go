@@ -18,16 +18,25 @@ type BalanceChecker struct {
         chains       []ChainInfo
         httpClient   *utils.HTTPClient
         logger       *utils.Logger
+        proxyManager *utils.ProxyManager
 }
 
 // NewBalanceChecker creates a new balance checker instance
 func NewBalanceChecker(requestDelay int, chains []ChainInfo, logger *utils.Logger) *BalanceChecker {
+        client := utils.NewHTTPClient()
         return &BalanceChecker{
                 requestDelay: requestDelay,
                 chains:       chains,
-                httpClient:   utils.NewHTTPClient(),
+                httpClient:   client,
                 logger:       logger,
+                proxyManager: nil,
         }
+}
+
+// SetProxyManager sets the proxy manager for the balance checker
+func (bc *BalanceChecker) SetProxyManager(proxyManager *utils.ProxyManager) {
+        bc.proxyManager = proxyManager
+        bc.httpClient.SetProxyManager(proxyManager, bc.logger)
 }
 
 // CheckWalletBalances checks a wallet's balance across multiple chains

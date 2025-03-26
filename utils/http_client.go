@@ -13,7 +13,9 @@ import (
 
 // HTTPClient is a wrapper around the standard http client with additional functionality
 type HTTPClient struct {
-        client *http.Client
+        client      *http.Client
+        proxyManager *ProxyManager
+        logger      *Logger
 }
 
 // NewHTTPClient creates a new HTTP client with optimized settings for high performance
@@ -45,7 +47,15 @@ func NewHTTPClient() *HTTPClient {
         
         return &HTTPClient{
                 client: client,
+                proxyManager: nil,
+                logger: nil,
         }
+}
+
+// SetProxyManager sets the proxy manager for this HTTP client
+func (c *HTTPClient) SetProxyManager(pm *ProxyManager, logger *Logger) {
+        c.proxyManager = pm
+        c.logger = logger
 }
 
 // Get performs an HTTP GET request with a customizable user agent and anti-bot protection bypass
@@ -60,14 +70,41 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 maxRetries = 5 // More retries for these sites
         }
         
+        // If we have a proxy manager, use it
+        var currentProxy *Proxy
+        var proxyClient *http.Client
+        var usingProxy bool
+        
+        if c.proxyManager != nil && c.proxyManager.IsEnabled() {
+                // Get a proxy
+                proxy, err := c.proxyManager.GetNextProxy()
+                if err != nil {
+                        c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
+                } else if proxy != nil {
+                        currentProxy = proxy
+                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                        if err != nil {
+                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                c.proxyManager.ReleaseProxy(proxy, false)
+                                currentProxy = nil
+                        } else {
+                                usingProxy = true
+                                c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                        }
+                }
+        }
+        
         for attempt := 0; attempt < maxRetries; attempt++ {
-                // Random delay between 100-300ms to make requests look more human
-                randomDelay := 100 + (time.Now().UnixNano() % 200)
+                // Random delay between 50-150ms to make requests look more human but faster overall
+                randomDelay := 50 + (time.Now().UnixNano() % 100)
                 time.Sleep(time.Duration(randomDelay) * time.Millisecond)
                 
                 // Create a new request
                 req, err := http.NewRequest("GET", url, nil)
                 if err != nil {
+                        if currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
                         return "", fmt.Errorf("error creating request: %v", err)
                 }
                 
@@ -113,11 +150,42 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                     req.Header.Set("Referer", referrers[attempt%len(referrers)])
                 }
                 
-                // Perform the request
-                resp, err := c.client.Do(req)
-                if err != nil {
-                        lastErr = fmt.Errorf("error performing request: %v", err)
-                        time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                // Perform the request using either the proxy client or the default client
+                var resp *http.Response
+                var reqErr error
+                if usingProxy {
+                        resp, reqErr = proxyClient.Do(req)
+                } else {
+                        resp, reqErr = c.client.Do(req)
+                }
+                
+                if reqErr != nil {
+                        lastErr = fmt.Errorf("error performing request: %v", reqErr)
+                        
+                        // If using proxy and request failed, try a different proxy
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                                // Try to get a new proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                        c.logger.Debug("Failed to get a new proxy, falling back to direct connection")
+                                        usingProxy = false
+                                        currentProxy = nil
+                                } else {
+                                        currentProxy = proxy
+                                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                        if err != nil {
+                                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                                c.proxyManager.ReleaseProxy(proxy, false)
+                                                usingProxy = false
+                                                currentProxy = nil
+                                        } else {
+                                                c.logger.Debug(fmt.Sprintf("Switched to proxy: %s", proxy.URL))
+                                        }
+                                }
+                        }
+                        
+                        time.Sleep(time.Duration(300*(attempt+1)) * time.Millisecond)
                         continue
                 }
                 defer resp.Body.Close()
@@ -125,24 +193,58 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                 // Check status code
                 if resp.StatusCode != http.StatusOK {
                         lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+                        
+                        // If using proxy and got a bad status, try a different proxy
+                        if usingProxy && currentProxy != nil && (resp.StatusCode == http.StatusForbidden || 
+                           resp.StatusCode == http.StatusTooManyRequests) {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                                // Try to get a new proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                        c.logger.Debug("Failed to get a new proxy, falling back to direct connection")
+                                        usingProxy = false
+                                        currentProxy = nil
+                                } else {
+                                        currentProxy = proxy
+                                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                        if err != nil {
+                                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                                c.proxyManager.ReleaseProxy(proxy, false)
+                                                usingProxy = false
+                                                currentProxy = nil
+                                        } else {
+                                                c.logger.Debug(fmt.Sprintf("Switched to proxy: %s", proxy.URL))
+                                        }
+                                }
+                        }
+                        
                         // Only retry certain status codes
                         if resp.StatusCode == http.StatusForbidden || 
                            resp.StatusCode == http.StatusTooManyRequests || 
                            resp.StatusCode >= 500 {
                                 // More aggressive backoff for stronger anti-bot sites
                                 if isArbitrumOrBase {
-                                    time.Sleep(time.Duration(1000*(attempt+1)) * time.Millisecond)
+                                    time.Sleep(time.Duration(800*(attempt+1)) * time.Millisecond)
                                 } else {
-                                    time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                                    time.Sleep(time.Duration(300*(attempt+1)) * time.Millisecond)
                                 }
                                 continue
                         }
+                        
+                        // If we get here, we're not going to retry, so release the proxy if we were using one
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
+                        
                         return "", lastErr
                 }
                 
                 // Read the response body
                 body, err := io.ReadAll(resp.Body)
                 if err != nil {
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
                         return "", fmt.Errorf("error reading response body: %v", err)
                 }
                 
@@ -152,11 +254,45 @@ func (c *HTTPClient) Get(url, userAgent string) (string, error) {
                    bytes.Contains(body, []byte("challenge")) || 
                    bytes.Contains(body, []byte("captcha"))) {
                         lastErr = fmt.Errorf("detected bot protection page")
-                        time.Sleep(time.Duration(1000*(attempt+1)) * time.Millisecond)
+                        
+                        // If using a proxy, try a different one
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                                // Try to get a new proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                        c.logger.Debug("Failed to get a new proxy, falling back to direct connection")
+                                        usingProxy = false
+                                        currentProxy = nil
+                                } else {
+                                        currentProxy = proxy
+                                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                        if err != nil {
+                                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                                c.proxyManager.ReleaseProxy(proxy, false)
+                                                usingProxy = false
+                                                currentProxy = nil
+                                        } else {
+                                                c.logger.Debug(fmt.Sprintf("Switched to proxy: %s", proxy.URL))
+                                        }
+                                }
+                        }
+                        
+                        time.Sleep(time.Duration(800*(attempt+1)) * time.Millisecond)
                         continue
                 }
                 
+                // If we got here, the request was successful
+                if usingProxy && currentProxy != nil {
+                        c.proxyManager.ReleaseProxy(currentProxy, true)
+                }
+                
                 return string(body), nil
+        }
+        
+        // If we get here, we've exhausted all retries, so release the proxy if we were using one
+        if usingProxy && currentProxy != nil {
+                c.proxyManager.ReleaseProxy(currentProxy, false)
         }
         
         return "", fmt.Errorf("maximum retries reached: %v", lastErr)
@@ -167,11 +303,42 @@ func (c *HTTPClient) Post(url, userAgent, contentType string, body []byte) (stri
         maxRetries := 3
         var lastErr error
         
+        // If we have a proxy manager, use it
+        var currentProxy *Proxy
+        var proxyClient *http.Client
+        var usingProxy bool
+        
+        if c.proxyManager != nil && c.proxyManager.IsEnabled() {
+                // Get a proxy
+                proxy, err := c.proxyManager.GetNextProxy()
+                if err != nil {
+                        c.logger.Debug(fmt.Sprintf("Failed to get proxy: %v", err))
+                } else if proxy != nil {
+                        currentProxy = proxy
+                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                        if err != nil {
+                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                c.proxyManager.ReleaseProxy(proxy, false)
+                                currentProxy = nil
+                        } else {
+                                usingProxy = true
+                                c.logger.Debug(fmt.Sprintf("Using proxy: %s", proxy.URL))
+                        }
+                }
+        }
+        
         for attempt := 0; attempt < maxRetries; attempt++ {
+                // Random delay between 50-150ms to make requests look more human but faster overall
+                randomDelay := 50 + (time.Now().UnixNano() % 100)
+                time.Sleep(time.Duration(randomDelay) * time.Millisecond)
+                
                 // Create a new request with the provided body
                 bodyReader := bytes.NewReader(body)
                 req, err := http.NewRequest("POST", url, bodyReader)
                 if err != nil {
+                        if currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
                         return "", fmt.Errorf("error creating request: %v", err)
                 }
                 
@@ -197,11 +364,42 @@ func (c *HTTPClient) Post(url, userAgent, contentType string, body []byte) (stri
                 }
                 req.Header.Set("Referer", referrers[attempt%len(referrers)])
                 
-                // Perform the request
-                resp, err := c.client.Do(req)
-                if err != nil {
-                        lastErr = fmt.Errorf("error performing request: %v", err)
-                        time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                // Perform the request using either the proxy client or the default client
+                var resp *http.Response
+                var reqErr error
+                if usingProxy {
+                        resp, reqErr = proxyClient.Do(req)
+                } else {
+                        resp, reqErr = c.client.Do(req)
+                }
+                
+                if reqErr != nil {
+                        lastErr = fmt.Errorf("error performing request: %v", reqErr)
+                        
+                        // If using proxy and request failed, try a different proxy
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                                // Try to get a new proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                        c.logger.Debug("Failed to get a new proxy, falling back to direct connection")
+                                        usingProxy = false
+                                        currentProxy = nil
+                                } else {
+                                        currentProxy = proxy
+                                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                        if err != nil {
+                                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                                c.proxyManager.ReleaseProxy(proxy, false)
+                                                usingProxy = false
+                                                currentProxy = nil
+                                        } else {
+                                                c.logger.Debug(fmt.Sprintf("Switched to proxy: %s", proxy.URL))
+                                        }
+                                }
+                        }
+                        
+                        time.Sleep(time.Duration(300*(attempt+1)) * time.Millisecond)
                         continue
                 }
                 defer resp.Body.Close()
@@ -209,23 +407,67 @@ func (c *HTTPClient) Post(url, userAgent, contentType string, body []byte) (stri
                 // Check status code
                 if resp.StatusCode != http.StatusOK {
                         lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+                        
+                        // If using proxy and got a bad status, try a different proxy
+                        if usingProxy && currentProxy != nil && (resp.StatusCode == http.StatusForbidden || 
+                           resp.StatusCode == http.StatusTooManyRequests) {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                                // Try to get a new proxy for the next attempt
+                                proxy, err := c.proxyManager.GetNextProxy()
+                                if err != nil || proxy == nil {
+                                        c.logger.Debug("Failed to get a new proxy, falling back to direct connection")
+                                        usingProxy = false
+                                        currentProxy = nil
+                                } else {
+                                        currentProxy = proxy
+                                        proxyClient, err = c.proxyManager.GetHttpClient(proxy)
+                                        if err != nil {
+                                                c.logger.Debug(fmt.Sprintf("Failed to create proxy client: %v", err))
+                                                c.proxyManager.ReleaseProxy(proxy, false)
+                                                usingProxy = false
+                                                currentProxy = nil
+                                        } else {
+                                                c.logger.Debug(fmt.Sprintf("Switched to proxy: %s", proxy.URL))
+                                        }
+                                }
+                        }
+                        
                         // Only retry certain status codes
                         if resp.StatusCode == http.StatusForbidden || 
                            resp.StatusCode == http.StatusTooManyRequests || 
                            resp.StatusCode >= 500 {
-                                time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+                                time.Sleep(time.Duration(300*(attempt+1)) * time.Millisecond)
                                 continue
                         }
+                        
+                        // If we get here, we're not going to retry, so release the proxy if we were using one
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
+                        
                         return "", lastErr
                 }
                 
                 // Read the response body
                 responseBody, err := io.ReadAll(resp.Body)
                 if err != nil {
+                        if usingProxy && currentProxy != nil {
+                                c.proxyManager.ReleaseProxy(currentProxy, false)
+                        }
                         return "", fmt.Errorf("error reading response body: %v", err)
                 }
                 
+                // If we got here, the request was successful
+                if usingProxy && currentProxy != nil {
+                        c.proxyManager.ReleaseProxy(currentProxy, true)
+                }
+                
                 return string(responseBody), nil
+        }
+        
+        // If we get here, we've exhausted all retries, so release the proxy if we were using one
+        if usingProxy && currentProxy != nil {
+                c.proxyManager.ReleaseProxy(currentProxy, false)
         }
         
         return "", fmt.Errorf("maximum retries reached: %v", lastErr)

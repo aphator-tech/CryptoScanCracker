@@ -136,3 +136,35 @@ func GetChainList(chainsArg string) []ChainInfo {
         
         return selectedChains
 }
+
+// GetChainsByNames returns a list of ChainInfo based on exact chain names
+func GetChainsByNames(chainNames []string) []ChainInfo {
+        var selectedChains []ChainInfo
+        
+        // Create a map for fast lookups
+        chainMap := make(map[string]ChainInfo)
+        for _, chain := range supportedChains {
+                chainMap[chain.Name] = chain
+        }
+        
+        // Select chains by name
+        for _, name := range chainNames {
+                name = strings.TrimSpace(strings.ToLower(name))
+                if chain, ok := chainMap[name]; ok {
+                        // Override the built-in enabled flag with what's in the config
+                        chain.Enabled = true
+                        selectedChains = append(selectedChains, chain)
+                }
+        }
+        
+        // If no valid chains were selected, return all enabled chains
+        if len(selectedChains) == 0 {
+                for _, chain := range supportedChains {
+                        if chain.Enabled {
+                                selectedChains = append(selectedChains, chain)
+                        }
+                }
+        }
+        
+        return selectedChains
+}
