@@ -1,0 +1,77 @@
+{
+  "wallets": [
+    {
+      "address": "0x03e8b23e76e505f201ad8894f4d9aa81c9d0fbf1",
+      "private_key": "fe22b021e4e2e317e8a27f95b006c6b51cc276ce61d4e4bc11e6076fcd3eb0c9",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0x0fd7126733ade031e19bda9dd811e1707f812516",
+      "private_key": "f8d5d9304febc54573bff3da40ed8ec8d64dcb1995120a36f5b1e77c619ac54f",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xc75982d2e8450f3c17865b0d9786a43e331d729a",
+      "private_key": "56c3af8aac28d412dd5815360fc545e58307b541f3f6131fbafac7bb45d83fc9",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0x85f7d9eb3fc54efd2ea1b1f127958d21b3655638",
+      "private_key": "564bb19fadd2712ac1deab9d115cc6ccd280318528e1c6cbcfc9cee2960a720c",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xa281602291aaf1fed5dc6c2c7e17078a667cb397",
+      "private_key": "df37c41089fe4775e24bc84026709f373a71a8df9e964f4c31e83b9354d56555",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xbe85ec4894a308ff9bee2aedac8c43e8539a3fa7",
+      "private_key": "65d140406505074f03a2c4bcb536dd87f2e0745395cf3090b426220210f72595",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xdd15479f1d9293b73bbc38c60ab10fd9611c6138",
+      "private_key": "ed7a4c495de05d1dcf7b8f00263be826adfdf0646a67e12264b8fae8c9759ce7",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xe15def2182c4dff9fb50762ce4ea0f37de8dc0d8",
+      "private_key": "ffbbe70117cdc5f8765da4495e7363f4bffa5388a6a1545db88a0d1bf6668afa",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0xb1acc45c8114b83024c7fa60d0ce398668125419",
+      "private_key": "8bb49a225f6909f2f68d7e458a75ad8d7b65c742cf6b69bb69a5b00c16772d90",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    },
+    {
+      "address": "0x53ae9270f92fe46ab7210e57027bd03af1ae7b87",
+      "private_key": "4625804c486d5164e92ffa948c2dd6bdaf4c07f6bc76db0140083dbc96839089",
+      "chain": "avalanche",
+      "balance": "3.0",
+      "has_balance": true
+    }
+  ],
+  "total_count": 10,
+  "generated_at": "2025-03-26T05:03:43Z",
+  "updated_at": "2025-03-26T05:03:58Z"
+}

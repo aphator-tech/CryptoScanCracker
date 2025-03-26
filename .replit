@@ -1,0 +1,33 @@
+modules = ["go"]
+
+[nix]
+channel = "stable-24_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "crypto_wallet_checker"
+
+[[workflows.workflow]]
+name = "crypto_wallet_checker"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run main.go --wallets 10 --batch 5 --delay 500 --log debug"
+
+[deployment]
+run = ["sh", "-c", "go run main.go --wallets 5 --batch 2 --delay 500 --log debug"]
