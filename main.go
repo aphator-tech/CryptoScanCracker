@@ -146,10 +146,27 @@ func main() {
                         defer wg.Done()
                         for w := range walletChan {
                                 walletWithBalances := balanceChecker.CheckWalletBalances(w)
+                                hasAnyBalance := false
+                                
                                 for _, wb := range walletWithBalances {
                                         if wb.HasBalance {
+                                                hasAnyBalance = true
                                                 resultChan <- wb
                                         }
+                                }
+                                
+                                // Print wallet check result with timestamp
+                                timestamp := time.Now().Format("15:04:05")
+                                if hasAnyBalance {
+                                        fmt.Printf("[%s] %s - %s\n", 
+                                                timestamp, 
+                                                utils.ColorYellow(w.Address), 
+                                                utils.ColorGreen("✅ BALANCE FOUND!"))
+                                } else {
+                                        fmt.Printf("[%s] %s - %s\n", 
+                                                timestamp, 
+                                                utils.ColorYellow(w.Address), 
+                                                utils.ColorRed("❌ No balance"))
                                 }
                         }
                 }()
@@ -203,7 +220,6 @@ func main() {
         
         // Process wallet generation in batches
         batchNum := 0
-        startTime := time.Now()
         
         // Main loop - either runs until we reach the target, or forever in infinite mode
         for *infiniteMode || walletsProcessed < targetWallets {
@@ -229,84 +245,14 @@ func main() {
                                 walletsProcessed++
                         }
                         
-                        // Show periodic stats (every 5 batches for better feedback)
-                        if batchNum%5 == 0 {
+                        // Periodically save results in the background without cluttering output
+                        if batchNum%50 == 0 {
                                 walletsWithBalance = store.Count()
-                                speed := float64(walletsProcessed) / time.Since(startTime).Seconds()
                                 
-                                // Calculate progress percentage
-                                var progressPercent float64
-                                if *infiniteMode {
-                                    progressPercent = float64(batchNum % 100) // Just for visual in infinite mode
-                                } else {
-                                    progressPercent = float64(walletsProcessed) / float64(targetWallets) * 100
-                                }
-                                
-                                // Create a fancy progress bar
-                                progressBar := "["
-                                barLength := 20
-                                filledLength := int(float64(barLength) * progressPercent / 100)
-                                
-                                for i := 0; i < barLength; i++ {
-                                    if i < filledLength {
-                                        progressBar += "■" // Filled block
-                                    } else {
-                                        progressBar += "□" // Empty block
-                                    }
-                                }
-                                progressBar += "]"
-                                
-                                // Choose emoji based on speed
-                                speedEmoji := "🚀" // Default fast
-                                if speed < 5 {
-                                    speedEmoji = "🐢" // Slow
-                                } else if speed < 20 {
-                                    speedEmoji = "🚶" // Medium
-                                } else if speed < 50 {
-                                    speedEmoji = "🏃" // Fast
-                                }
-                                
-                                // Fancy colorful output
-                                var statusLine string
-                                if *infiniteMode {
-                                    statusLine = fmt.Sprintf("%s %s %s %.1f%% | %s Speed: %.1f w/s | Checked: %s | Found: %s", 
-                                        utils.ColorCyan("🔍"), 
-                                        progressBar,
-                                        utils.ColorYellow(fmt.Sprintf("%.1f%%", progressPercent)),
-                                        progressPercent,
-                                        speedEmoji,
-                                        speed,
-                                        utils.ColorMagenta(fmt.Sprintf("%d", walletsProcessed)),
-                                        utils.ColorGreen(fmt.Sprintf("%d", walletsWithBalance)))
-                                } else {
-                                    statusLine = fmt.Sprintf("%s %s %s %.1f%% | %s Speed: %.1f w/s | Progress: %s/%s | Found: %s", 
-                                        utils.ColorCyan("🔍"), 
-                                        progressBar,
-                                        utils.ColorYellow(fmt.Sprintf("%.1f%%", progressPercent)),
-                                        progressPercent,
-                                        speedEmoji,
-                                        speed,
-                                        utils.ColorMagenta(fmt.Sprintf("%d", walletsProcessed)),
-                                        utils.ColorBlue(fmt.Sprintf("%d", targetWallets)),
-                                        utils.ColorGreen(fmt.Sprintf("%d", walletsWithBalance)))
-                                }
-                                
-                                // Print directly to console for visibility regardless of log level
-                                fmt.Println(statusLine)
-                                
-                                // Save results
+                                // Only save results - don't display progress bar
                                 err := store.Save()
                                 if err != nil {
                                         logger.Error(fmt.Sprintf("Error saving results: %v", err))
-                                }
-                                
-                                // If we're using proxies, log the proxy stats
-                                if proxyManager != nil {
-                                    activeProxies := proxyManager.GetActiveProxyCount()
-                                    totalProxies := proxyManager.GetProxyCount()
-                                    if activeProxies < totalProxies/2 {
-                                        fmt.Println(utils.ColorYellow(fmt.Sprintf("ℹ️ Proxy status: %d active / %d total", activeProxies, totalProxies)))
-                                    }
                                 }
                         }
                         
@@ -315,7 +261,6 @@ func main() {
                                 logger.Info(fmt.Sprintf("Processed %d wallets, resetting counter", walletsProcessed))
                                 walletsProcessed = 0
                                 batchNum = 0
-                                startTime = time.Now() // Reset the timer too for accurate speed calculation
                         }
                 }
         }
