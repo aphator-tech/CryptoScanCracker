@@ -5,6 +5,7 @@ import (
         "regexp"
         "strconv"
         "strings"
+        "sync"
         "time"
 
         "cryptowallet/utils"
@@ -33,13 +34,40 @@ func NewBalanceChecker(requestDelay int, chains []ChainInfo, logger *utils.Logge
 func (bc *BalanceChecker) CheckWalletBalances(w wallet.Wallet) []wallet.WalletWithBalance {
         var results []wallet.WalletWithBalance
         
+        // Initialize with empty results for each chain
         for _, chain := range bc.chains {
-                result := bc.checkBalanceOnChain(w, chain)
-                results = append(results, result)
-                
-                // Rate limiting
-                time.Sleep(time.Duration(bc.requestDelay) * time.Millisecond)
+                results = append(results, wallet.WalletWithBalance{
+                        Address:    w.Address,
+                        PrivateKey: w.PrivateKey,
+                        Chain:      chain.Name,
+                        Balance:    "0",
+                        HasBalance: false,
+                })
         }
+        
+        // Create a wait group to check chains in parallel
+        var wg sync.WaitGroup
+        resultsMutex := &sync.Mutex{}
+        
+        // Check each chain in parallel
+        for i, chain := range bc.chains {
+            wg.Add(1)
+            go func(idx int, c ChainInfo) {
+                defer wg.Done()
+                // Add a tiny delay to stagger requests slightly
+                time.Sleep(time.Duration(bc.requestDelay/10) * time.Millisecond)
+                
+                result := bc.checkBalanceOnChain(w, c)
+                
+                // Update results
+                resultsMutex.Lock()
+                results[idx] = result
+                resultsMutex.Unlock()
+            }(i, chain)
+        }
+        
+        // Wait for all checks to complete
+        wg.Wait()
         
         return results
 }

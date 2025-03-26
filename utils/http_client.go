@@ -2,8 +2,10 @@ package utils
 
 import (
         "bytes"
+        "crypto/tls"
         "fmt"
         "io"
+        "net"
         "net/http"
         "strings"
         "time"
@@ -14,14 +16,30 @@ type HTTPClient struct {
         client *http.Client
 }
 
-// NewHTTPClient creates a new HTTP client with sane defaults
+// NewHTTPClient creates a new HTTP client with optimized settings for high performance
 func NewHTTPClient() *HTTPClient {
         client := &http.Client{
-                Timeout: 10 * time.Second,
+                Timeout: 8 * time.Second,
                 Transport: &http.Transport{
-                        MaxIdleConns:        100,
+                        MaxIdleConns:        500,
                         MaxIdleConnsPerHost: 100,
+                        MaxConnsPerHost:     100,
                         IdleConnTimeout:     90 * time.Second,
+                        DisableKeepAlives:   false,
+                        DisableCompression:  false,
+                        ForceAttemptHTTP2:   true,
+                        // Optimized dial settings for faster connections
+                        DialContext: (&net.Dialer{
+                                Timeout:   5 * time.Second,
+                                KeepAlive: 30 * time.Second,
+                                DualStack: true,
+                        }).DialContext,
+                        TLSHandshakeTimeout: 5 * time.Second,
+                        // More permissive TLS config
+                        TLSClientConfig: &tls.Config{
+                                InsecureSkipVerify: false, // Don't skip SSL verification
+                                MinVersion:         tls.VersionTLS12,
+                        },
                 },
         }
         
