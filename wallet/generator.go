@@ -1,16 +1,12 @@
 package wallet
 
 import (
-        "crypto/ecdsa"
-        "crypto/rand"
         "encoding/hex"
         "fmt"
-        "math/big"
         "strings"
 
-        "crypto/elliptic"
-
         "cryptowallet/utils"
+        "github.com/btcsuite/btcd/btcec/v2"
         "golang.org/x/crypto/sha3"
 )
 
@@ -43,8 +39,8 @@ func NewGenerator(logger *utils.Logger) *Generator {
 
 // GenerateWallet generates a new random Ethereum/EVM wallet
 func (g *Generator) GenerateWallet() Wallet {
-        // Generate private key using elliptic curve cryptography
-        privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+        // Generate a secp256k1 private key (what Ethereum uses)
+        privateKey, err := btcec.NewPrivateKey()
         if err != nil {
                 g.logger.Error(fmt.Sprintf("Error generating private key: %v", err))
                 // In production code, we would handle this more gracefully
@@ -52,11 +48,20 @@ func (g *Generator) GenerateWallet() Wallet {
         }
 
         // Convert private key to hex
-        privateKeyBytes := privateKey.D.Bytes()
+        privateKeyBytes := privateKey.Serialize()
         privateKeyHex := hex.EncodeToString(privateKeyBytes)
 
-        // Derive address from public key
-        address := g.deriveAddress(privateKey)
+        // Get the public key and derive the address
+        publicKey := privateKey.PubKey()
+        publicKeyBytes := publicKey.SerializeUncompressed()[1:] // Skip the first byte (0x04)
+
+        // Keccak256 hash of public key (Ethereum address derivation)
+        h := sha3.NewLegacyKeccak256()
+        h.Write(publicKeyBytes)
+        hash := h.Sum(nil)
+
+        // Take the last 20 bytes for the Ethereum address
+        address := "0x" + hex.EncodeToString(hash[len(hash)-20:])
 
         g.logger.Debug(fmt.Sprintf("Generated wallet with address: %s", address))
 
@@ -66,44 +71,30 @@ func (g *Generator) GenerateWallet() Wallet {
         }
 }
 
-// deriveAddress derives an Ethereum address from a private key
-func (g *Generator) deriveAddress(privateKey *ecdsa.PrivateKey) string {
-        // Get the public key
-        publicKey := privateKey.Public()
-        publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-        if !ok {
-                g.logger.Error("Error casting public key to ECDSA")
-                panic("Error casting public key to ECDSA")
-        }
-
-        // Skip the first byte which contains the key prefix (0x04)
-        publicKeyBytes := elliptic.Marshal(publicKeyECDSA.Curve, publicKeyECDSA.X, publicKeyECDSA.Y)[1:]
-
-        // Keccak256 hash of public key
-        h := sha3.NewLegacyKeccak256()
-        h.Write(publicKeyBytes)
-        hash := h.Sum(nil)
-
-        // Take the last 20 bytes of the hash
-        address := hash[len(hash)-20:]
-        
-        // Return the address with 0x prefix
-        return "0x" + hex.EncodeToString(address)
-}
-
 // ValidatePrivateKey validates a private key string
 func (g *Generator) ValidatePrivateKey(privateKeyHex string) bool {
         // Remove 0x prefix if present
         privateKeyHex = strings.TrimPrefix(privateKeyHex, "0x")
         
         // Check if the private key is a valid hex string
-        _, err := hex.DecodeString(privateKeyHex)
+        privateKeyBytes, err := hex.DecodeString(privateKeyHex)
         if err != nil {
                 return false
         }
         
         // Check if the private key is of valid length
-        return len(privateKeyHex) == 64 // 32 bytes = 64 hex chars
+        if len(privateKeyHex) != 64 { // 32 bytes = 64 hex chars
+                return false
+        }
+        
+        // Check if it's a valid secp256k1 private key
+        // btcec.PrivKeyFromBytes doesn't return an error, so we need to handle differently
+        privateKey, _ := btcec.PrivKeyFromBytes(privateKeyBytes)
+        if privateKey == nil {
+                return false
+        }
+        
+        return true
 }
 
 // PrivateKeyToAddress converts a private key to an Ethereum address
@@ -117,19 +108,20 @@ func (g *Generator) PrivateKeyToAddress(privateKeyHex string) (string, error) {
                 return "", fmt.Errorf("invalid private key: %v", err)
         }
         
-        // Create big int from bytes
-        privateKeyBigInt := new(big.Int).SetBytes(privateKeyBytes)
+        // Parse as a btcec private key
+        privateKey, _ := btcec.PrivKeyFromBytes(privateKeyBytes)
+        if privateKey == nil {
+                return "", fmt.Errorf("invalid private key format")
+        }
         
-        // Create private key from big int
-        privateKey := new(ecdsa.PrivateKey)
-        privateKey.Curve = elliptic.P256()
-        privateKey.D = privateKeyBigInt
+        // Get public key and derive address (same process as in GenerateWallet)
+        publicKey := privateKey.PubKey()
+        publicKeyBytes := publicKey.SerializeUncompressed()[1:] // Skip prefix byte
         
-        // Calculate public key
-        privateKey.PublicKey.X, privateKey.PublicKey.Y = privateKey.Curve.ScalarBaseMult(privateKeyBytes)
+        h := sha3.NewLegacyKeccak256()
+        h.Write(publicKeyBytes)
+        hash := h.Sum(nil)
         
-        // Derive address
-        address := g.deriveAddress(privateKey)
-        
-        return address, nil
+        // Return address with 0x prefix
+        return "0x" + hex.EncodeToString(hash[len(hash)-20:]), nil
 }

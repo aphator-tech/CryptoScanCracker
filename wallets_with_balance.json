@@ -1,77 +1,77 @@
 {
   "wallets": [
     {
-      "address": "0x03e8b23e76e505f201ad8894f4d9aa81c9d0fbf1",
-      "private_key": "fe22b021e4e2e317e8a27f95b006c6b51cc276ce61d4e4bc11e6076fcd3eb0c9",
+      "address": "0x7bb70149f0e1034778283405c309410f7607496c",
+      "private_key": "88003979ed3e83eac27faf181676dfb408dadcd611b4924bdb579d2f7a3456c0",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0x0fd7126733ade031e19bda9dd811e1707f812516",
-      "private_key": "f8d5d9304febc54573bff3da40ed8ec8d64dcb1995120a36f5b1e77c619ac54f",
+      "address": "0x44d2dedb14289e285ed33d789a6898aff3d0ed4f",
+      "private_key": "3b07c71855f1ec38e0f83c9a14600247df5321248a74bee3275a8530d26fd589",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xc75982d2e8450f3c17865b0d9786a43e331d729a",
-      "private_key": "56c3af8aac28d412dd5815360fc545e58307b541f3f6131fbafac7bb45d83fc9",
+      "address": "0xa1e210cbec962e7f6dfd263a355933e9ba72156d",
+      "private_key": "cc5367cb838fe5b6b04d94c0bf8d2af3ad0aa477d71d8f3603a82303d7da3c39",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0x85f7d9eb3fc54efd2ea1b1f127958d21b3655638",
-      "private_key": "564bb19fadd2712ac1deab9d115cc6ccd280318528e1c6cbcfc9cee2960a720c",
+      "address": "0x9c0208245666b855fa6a41ee66214bf33f5aecc8",
+      "private_key": "ed6f807823f4d593eb182bc81f0ddd8d03e9bbc8ccea2b2a3aba5fff7868df22",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xa281602291aaf1fed5dc6c2c7e17078a667cb397",
-      "private_key": "df37c41089fe4775e24bc84026709f373a71a8df9e964f4c31e83b9354d56555",
+      "address": "0xf7268a92f3479ae62fb5a2ca5a0b8220c1d86911",
+      "private_key": "66539d4f46a6e7596f8c50bb811dfd72ccf08d805302bca3e815fc4c07c1e9c1",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xbe85ec4894a308ff9bee2aedac8c43e8539a3fa7",
-      "private_key": "65d140406505074f03a2c4bcb536dd87f2e0745395cf3090b426220210f72595",
+      "address": "0x66af52ae78d3416f935749c2db621a83322e867a",
+      "private_key": "f1630e30d0ddf4656c4e6f9386d86208d21ce6e5dfb523d01de8365df8eeb519",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xdd15479f1d9293b73bbc38c60ab10fd9611c6138",
-      "private_key": "ed7a4c495de05d1dcf7b8f00263be826adfdf0646a67e12264b8fae8c9759ce7",
+      "address": "0x4ec7f7eb359af37352eebe7f3d226c9e7678ab5a",
+      "private_key": "f4ccb016c48f0cb46cb3f3e70e648203aa0d0240a0ae44ff33a78a6431b7d958",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xe15def2182c4dff9fb50762ce4ea0f37de8dc0d8",
-      "private_key": "ffbbe70117cdc5f8765da4495e7363f4bffa5388a6a1545db88a0d1bf6668afa",
+      "address": "0x20c675361425eb38aea4eb183f863891dd1493c4",
+      "private_key": "884de5eefdf5d8b18fb6c647249227fbb1f7c04d950d15db40ac1da4e16e0b7b",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0xb1acc45c8114b83024c7fa60d0ce398668125419",
-      "private_key": "8bb49a225f6909f2f68d7e458a75ad8d7b65c742cf6b69bb69a5b00c16772d90",
+      "address": "0xcc293ce7e94752d5b184504416cf8bb15029fb64",
+      "private_key": "9efda6ce56e30cb5720ded6ec2e00de3b49e3dcbe3a6436fc6621660a97b2e0d",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     },
     {
-      "address": "0x53ae9270f92fe46ab7210e57027bd03af1ae7b87",
-      "private_key": "4625804c486d5164e92ffa948c2dd6bdaf4c07f6bc76db0140083dbc96839089",
+      "address": "0xfeef582613e7e2abcec18753cf070fb107163d53",
+      "private_key": "1c9fdab3480a6ac0adf7569f84302e818c8eef826862dfb8bdec16d4e070ca92",
       "chain": "avalanche",
       "balance": "3.0",
       "has_balance": true
     }
   ],
   "total_count": 10,
-  "generated_at": "2025-03-26T05:03:43Z",
-  "updated_at": "2025-03-26T05:03:58Z"
+  "generated_at": "2025-03-26T05:12:46Z",
+  "updated_at": "2025-03-26T05:13:00Z"
 }
