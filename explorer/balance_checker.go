@@ -109,16 +109,15 @@ func (bc *BalanceChecker) parseBalance(html, pattern string) (string, error) {
 
 // fallbackBalanceParsing tries a more generic approach to find balances
 func (bc *BalanceChecker) fallbackBalanceParsing(html string) (string, error) {
-        // Common balance indicators in blockchain explorers
-        balanceIndicators := []string{
-                `Balance:</span>\s*(\d+\.\d+)`,
-                `Balance</div>\s*<div[^>]*>(\d+\.\d+)`,
-                `Balance:\s*(\d+\.\d+)`,
-                `data-balance=['"](\d+\.\d+)['"]`,
+        // Modern etherscan-family patterns
+        modernPatterns := []string{
+                // Modern etherscan pattern with text-$ class (most common now)
+                `<div class="card-body">[\s\S]*?<span class="text-[$][^"]*">(\d+\.\d+) [A-Z]+</span>`,
+                // Alternative modern pattern
+                `<div[^>]*>[^<]*Balance[\s\S]*?<span[^>]*>(\d+\.\d+) [A-Z]+</span>`,
         }
         
-        // Try each pattern
-        for _, pattern := range balanceIndicators {
+        for _, pattern := range modernPatterns {
                 re := regexp.MustCompile(pattern)
                 matches := re.FindStringSubmatch(html)
                 
@@ -127,7 +126,29 @@ func (bc *BalanceChecker) fallbackBalanceParsing(html string) (string, error) {
                 }
         }
         
-        // Check for any number that might be a balance
+        // Legacy patterns for older etherscan versions
+        legacyPatterns := []string{
+                // Older column-based layout
+                `<div class="col-md-8">(\d+\.\d+) [A-Z]+</div>`,
+                // Other common formats
+                `Balance:</span>\s*(\d+\.\d+)`,
+                `Balance</div>\s*<div[^>]*>(\d+\.\d+)`,
+                `Balance:\s*(\d+\.\d+)`,
+                `data-balance=['"](\d+\.\d+)['"]`,
+                // Table-based layouts
+                `<td[^>]*>(\d+\.\d+) [A-Z]+</td>`,
+        }
+        
+        for _, pattern := range legacyPatterns {
+                re := regexp.MustCompile(pattern)
+                matches := re.FindStringSubmatch(html)
+                
+                if len(matches) >= 2 {
+                        return matches[1], nil
+                }
+        }
+        
+        // Check for any number that might be a balance near "Balance" text
         // This is a last resort approach
         balancePattern := `Balance[^<>]*?(\d+\.\d+)`
         re := regexp.MustCompile(balancePattern)
@@ -139,8 +160,9 @@ func (bc *BalanceChecker) fallbackBalanceParsing(html string) (string, error) {
         
         // Check if the page indicates zero balance
         zeroIndicators := []string{
-                "0 ETH", "0 BNB", "0 MATIC", "0 FTM", "0 AVAX", "0 CELO",
-                "Balance: 0", "Balance: 0.0",
+                "0 ETH", "0 BNB", "0 MATIC", "0 FTM", "0 AVAX", "0 CELO", "0 ETH",
+                "Balance: 0", "Balance: 0.0", "<span class=\"text-$[^\"]>0</span>",
+                "0 Token", "0 Tokens", "Balance</div>\\s*<div[^>]*>0<",
         }
         
         for _, zero := range zeroIndicators {
